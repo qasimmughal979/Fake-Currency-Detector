@@ -1,4 +1,25 @@
-Final_Clean_Dataset/
-dataset/
+# System and Environment
+.DS_Store
+.env
+.venv/
 __pycache__/
 *.pyc
+
+# Dataset and Models
+Final_Clean_Dataset.zip
+Final_Clean_Dataset/
+yolov8s-world.pt
+Module1_Results/
+Module2_Results/
+Module3_Results/
+*.h5
+*.pt
+
+# Node Modules and Next.js
+web-app/node_modules/
+web-app/.next/
+web-app/.env.local
+web-app/.env
+
+# Temporary Files
+*.log

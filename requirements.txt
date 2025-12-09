@@ -1,0 +1,7 @@
+flask
+flask-cors
+tensorflow
+pillow
+python-dotenv
+google-generativeai
+numpy<2.0.0
