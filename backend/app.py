@@ -6,6 +6,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from tensorflow.keras.models import load_model, Model
 from tensorflow.keras.preprocessing import image
+from tensorflow.keras.applications.resnet50 import preprocess_input
 from tensorflow.keras import backend as K
 from PIL import Image
 import io
@@ -21,12 +22,25 @@ CORS(app)  # Enable CORS for all routes
 # Define paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Support both local development and Docker deployment
-MODEL_PATH = os.environ.get('MODEL_PATH', os.path.join(BASE_DIR, '..', 'Module3_Results', 'resnet50_frozen_final.h5'))
-# Fallback for Docker: check /app/Module3_Results as well
-if not os.path.exists(MODEL_PATH):
-    docker_model_path = '/app/Module3_Results/resnet50_frozen_final.h5'
+# First try the converted .keras model, then fall back to h5
+CONVERTED_MODEL_PATH = os.environ.get('MODEL_PATH', os.path.join(BASE_DIR, '..', 'Module3_Results', 'resnet50_converted.keras'))
+LEGACY_MODEL_PATH = os.path.join(BASE_DIR, '..', 'Module3_Results', 'resnet50_frozen_final.h5')
+
+# Determine which model file to use
+if os.path.exists(CONVERTED_MODEL_PATH):
+    MODEL_PATH = CONVERTED_MODEL_PATH
+elif os.path.exists(LEGACY_MODEL_PATH):
+    MODEL_PATH = LEGACY_MODEL_PATH
+else:
+    # Check Docker paths
+    docker_model_path = '/app/Module3_Results/resnet50_converted.keras'
+    docker_legacy_path = '/app/Module3_Results/resnet50_frozen_final.h5'
     if os.path.exists(docker_model_path):
         MODEL_PATH = docker_model_path
+    elif os.path.exists(docker_legacy_path):
+        MODEL_PATH = docker_legacy_path
+    else:
+        MODEL_PATH = CONVERTED_MODEL_PATH  # Will fail, but gives error message
 
 # --- Gemini Vision Setup for Currency Verification ---
 from gemini_verifier import GeminiCurrencyVerifier
@@ -41,35 +55,17 @@ except Exception as e:
     gemini_verifier = None
 # --------------------------------------------------
 
-# Define Focal Loss (Required for loading the model)
-def focal_loss(gamma=2., alpha=0.25):
-    def focal_loss_fixed(y_true, y_pred):
-        epsilon = K.epsilon()
-        y_pred = K.clip(y_pred, epsilon, 1. - epsilon)
-        cross_entropy = -y_true * K.log(y_pred)
-        weight = alpha * y_true * K.pow((1 - y_pred), gamma)
-        loss = weight * cross_entropy
-        return K.mean(K.sum(loss, axis=1))
-    return focal_loss_fixed
-
 # Load Model
 print(f"Loading model from {MODEL_PATH}...")
+model = None
+
 try:
-    # We need to register the custom loss function
-    # Note: The model might have been saved with specific parameters for focal_loss,
-    # but when loading with custom_objects, providing the function factory or the function itself usually works.
-    # If the model was saved with the *result* of the factory, we might need to recreate it exactly or use a wrapper.
-    # However, 'focal_loss' is the name likely stored. The function defined in module3 returns 'focal_loss_fixed'.
-    # Let's try mapping 'focal_loss_fixed' to the inner function.
-    
-    # Actually, based on module3.py: loss=focal_loss(...)
-    # Keras saves the function name. The inner function is 'focal_loss_fixed'.
-    
-    # To be safe, we load without compiling first to avoid loss mismatch issues if we are just predicting.
-    model = load_model(MODEL_PATH, custom_objects={'focal_loss_fixed': focal_loss()}, compile=False)
-    print("Model loaded successfully!")
+    # Load the model (works for both .keras and .h5 formats)
+    import tensorflow.keras as keras
+    model = keras.models.load_model(MODEL_PATH, compile=False)
+    print("✓ Model loaded successfully!")
 except Exception as e:
-    print(f"Error loading model: {e}")
+    print(f"❌ Error loading model: {e}")
     model = None
 
 def preprocess_image(img_bytes):
@@ -79,7 +75,8 @@ def preprocess_image(img_bytes):
     img = img.resize((224, 224))
     img_array = image.img_to_array(img)
     img_array = np.expand_dims(img_array, axis=0)
-    img_array /= 255.0  # Normalize as per training
+    # Use ResNet50's preprocess_input (same as training and test_model.py)
+    img_array = preprocess_input(img_array)
     return img_array
 
 @app.route('/predict', methods=['POST'])
@@ -151,5 +148,6 @@ def health():
 
 if __name__ == '__main__':
     # Use 0.0.0.0 to bind to all interfaces (required for Docker)
-    debug_mode = os.environ.get('FLASK_ENV', 'development') == 'development'
-    app.run(host='0.0.0.0', debug=debug_mode, port=5000)
+    # Disable debug mode to prevent watchdog restarts with TensorFlow
+    debug_mode = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+    app.run(host='0.0.0.0', debug=debug_mode, port=5000, use_reloader=False)
