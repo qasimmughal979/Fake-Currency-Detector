@@ -1,6 +1,7 @@
 # System and Environment
 .DS_Store
 .env
+backend/.env
 .venv/
 __pycache__/
 *.pyc

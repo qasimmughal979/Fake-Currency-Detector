@@ -20,7 +20,7 @@ CORS(app)  # Enable CORS for all routes
 
 # Define paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, '..', 'Module3_Results', 'resnet50_robust_best.h5')
+MODEL_PATH = os.path.join(BASE_DIR, '..', 'Module3_Results', 'resnet50_frozen_final.h5')
 
 # --- Gemini Vision Setup for Currency Verification ---
 from gemini_verifier import GeminiCurrencyVerifier
@@ -122,11 +122,15 @@ def predict():
         
         # Sigmoid output: < 0.5 -> Class 0 (Fake), >= 0.5 -> Class 1 (Real)
         
-        result = "Real" if score >= 0.5 else "Fake"
+        # Sigmoid output: < 0.5 -> Class 0 (Fake), >= 0.5 -> Class 1 (Real)
+        
+        label = "Real" if score >= 0.5 else "Fake"
+        result_text = "Real Currency Detected" if label == "Real" else "Fake Currency Image Detected"
         confidence = score if score >= 0.5 else 1 - score
         
         return jsonify({
-            'result': result,
+            'result': result_text,
+            'label': label,
             'confidence': confidence,
             'raw_score': score,
             'verification': verification_note

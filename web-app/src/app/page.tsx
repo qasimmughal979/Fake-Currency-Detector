@@ -58,7 +58,7 @@ export default function Home() {
   const [preview, setPreview] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<{ result: string; confidence: number } | null>(null);
+  const [result, setResult] = useState<{ result: string; confidence: number; label?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,7 +99,8 @@ export default function Home() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to analyze image. Ensure backend is running.');
+        setError(errorData.error || 'Failed to analyze image. Ensure backend is running.');
+        return;
       }
 
       const data = await response.json();
@@ -289,12 +290,12 @@ export default function Home() {
                 >
                   <div className={cn(
                     "p-6 rounded-xl border backdrop-blur-md relative overflow-hidden flex items-center justify-between",
-                    result.result === 'Real'
+                    (result.label === 'Real' || result.result === 'Real')
                       ? "bg-emerald-500/10 border-emerald-500/50 shadow-[0_0_30px_rgba(16,185,129,0.2)]"
                       : "bg-red-500/10 border-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.2)]"
                   )}>
                     <div className="flex items-center gap-4">
-                      {result.result === 'Real' ? (
+                      {(result.label === 'Real' || result.result === 'Real') ? (
                         <div className="p-3 bg-emerald-500/20 rounded-full">
                           <CheckCircle2 className="w-8 h-8 text-emerald-400" />
                         </div>
@@ -307,7 +308,7 @@ export default function Home() {
                         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Result</h3>
                         <p className={cn(
                           "text-3xl font-black tracking-tight",
-                          result.result === 'Real' ? "text-emerald-400" : "text-red-400"
+                          (result.label === 'Real' || result.result === 'Real') ? "text-emerald-400" : "text-red-400"
                         )}>{result.result}</p>
                       </div>
                     </div>
