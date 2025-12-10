@@ -20,7 +20,13 @@ CORS(app)  # Enable CORS for all routes
 
 # Define paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, '..', 'Module3_Results', 'resnet50_frozen_final.h5')
+# Support both local development and Docker deployment
+MODEL_PATH = os.environ.get('MODEL_PATH', os.path.join(BASE_DIR, '..', 'Module3_Results', 'resnet50_frozen_final.h5'))
+# Fallback for Docker: check /app/Module3_Results as well
+if not os.path.exists(MODEL_PATH):
+    docker_model_path = '/app/Module3_Results/resnet50_frozen_final.h5'
+    if os.path.exists(docker_model_path):
+        MODEL_PATH = docker_model_path
 
 # --- Gemini Vision Setup for Currency Verification ---
 from gemini_verifier import GeminiCurrencyVerifier
@@ -144,4 +150,6 @@ def health():
     return jsonify({'status': 'running', 'model_loaded': model is not None})
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # Use 0.0.0.0 to bind to all interfaces (required for Docker)
+    debug_mode = os.environ.get('FLASK_ENV', 'development') == 'development'
+    app.run(host='0.0.0.0', debug=debug_mode, port=5000)
